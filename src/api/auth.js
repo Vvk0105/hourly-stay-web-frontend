@@ -1,19 +1,20 @@
 import axiosInstance from './axiosInstance'
 
-export const sendOtp = (phone) =>
-  axiosInstance.post('/api/v1/users/send-otp/', { phone })
+export const sendOtp = (phone_number) =>
+  axiosInstance.post('/api/v1/users/send-otp/', { phone_number })
 
-export const verifyOtp = (phone, otp) =>
-  axiosInstance.post('/api/v1/auth/users/verify-otp/', { phone, otp })
+export const verifyOtp = (phone_number, otp) =>
+  axiosInstance.post('/api/v1/users/verify-otp/', { phone_number, otp })
 
 export const refreshAccessToken = (refresh) =>
-  axiosInstance.post('/api/v1/auth/token/refresh/', { refresh })
+  axiosInstance.post('/api/v1/users/refresh/', { refresh })
 
 export const getProfile = () =>
-  axiosInstance.get('/api/v1/auth/users/me/')
+  axiosInstance.get('/api/v1/users/profile/')
 
 export const updateProfile = (data) =>
-  axiosInstance.patch('/api/v1/auth/users/me/', data)
+  axiosInstance.patch('/api/v1/users/profile/update/', data)
 
+// Registration is handled automatically by verify-otp for new users
 export const registerUser = (data) =>
-  axiosInstance.post('/api/v1/auth/users/register/', data)
+  axiosInstance.post('/api/v1/users/profile/update/', data)

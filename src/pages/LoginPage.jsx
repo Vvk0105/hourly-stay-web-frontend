@@ -10,6 +10,14 @@ import { cn } from '@/utils/cn'
 
 const STEPS = { PHONE: 'phone', OTP: 'otp' }
 
+const COUNTRY_CODES = [
+  { code: '+91', label: '🇮🇳 India' },
+  { code: '+1', label: '🇺🇸 USA' },
+  { code: '+44', label: '🇬🇧 UK' },
+  { code: '+971', label: '🇦🇪 UAE' },
+  { code: '+65', label: '🇸🇬 Singapore' },
+]
+
 const LoginPage = () => {
   const dispatch = useDispatch()
   const navigate = useNavigate()
@@ -26,6 +34,7 @@ const LoginPage = () => {
   }
 
   const [step, setStep] = useState(STEPS.PHONE)
+  const [countryCode, setCountryCode] = useState('+91')
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
   const [phoneError, setPhoneError] = useState('')
@@ -37,21 +46,27 @@ const LoginPage = () => {
     return ''
   }
 
+  const getFullPhone = () => {
+    return countryCode + phone.replace(/\D/g, '')
+  }
+
   const handleSendOtp = async (e) => {
-    e.preventDefault()
+    e?.preventDefault()
     const err = validatePhone(phone)
     if (err) { setPhoneError(err); return }
     setPhoneError('')
 
     try {
       dispatch(setAuthLoading(true))
-      await sendOtp(phone.replace(/\D/g, ''))
+      await sendOtp(getFullPhone())
       setStep(STEPS.OTP)
       notify.success('OTP sent to your phone number!')
     } catch (error) {
-      const msg = error.response?.data?.detail ?? 'Failed to send OTP. Try again.'
+      const msg = error.response?.data?.message ?? error.response?.data?.detail ?? 'Failed to send OTP. Try again.'
       dispatch(setAuthError(msg))
       notify.error(msg)
+    } finally {
+      dispatch(setAuthLoading(false))
     }
   }
 
@@ -62,16 +77,16 @@ const LoginPage = () => {
 
     try {
       dispatch(setAuthLoading(true))
-      const res = await verifyOtp(phone.replace(/\D/g, ''), otp)
+      const res = await verifyOtp(getFullPhone(), otp)
       dispatch(setCredentials({
         user: res.data.user,
         token: res.data.access,
         refreshToken: res.data.refresh,
       }))
-      notify.success(`Welcome back, ${res.data.user?.name ?? 'there'}!`)
+      notify.success(`Welcome back, ${res.data.user?.username ?? 'there'}!`)
       navigate(from, { replace: true })
     } catch (error) {
-      const msg = error.response?.data?.detail ?? 'Invalid OTP. Please try again.'
+      const msg = error.response?.data?.message ?? error.response?.data?.detail ?? 'Invalid OTP. Please try again.'
       dispatch(setAuthError(msg))
       setOtpError(msg)
     }
@@ -123,9 +138,16 @@ const LoginPage = () => {
               <div className="mb-5">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Mobile Number</label>
                 <div className="flex gap-2">
-                  <div className="flex items-center px-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-600 font-semibold text-sm select-none">
-                    🇮🇳 +91
-                  </div>
+                  <select
+                    value={countryCode}
+                    onChange={(e) => setCountryCode(e.target.value)}
+                    className="flex items-center px-2 bg-gray-50 border border-gray-200 rounded-xl text-gray-600 font-semibold text-sm outline-none cursor-pointer hover:border-brand-400 transition-all appearance-none"
+                    style={{ minWidth: '80px' }}
+                  >
+                    {COUNTRY_CODES.map(c => (
+                      <option key={c.code} value={c.code}>{c.label.split(' ')[0]} {c.code}</option>
+                    ))}
+                  </select>
                   <div className="relative flex-1">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
@@ -173,7 +195,7 @@ const LoginPage = () => {
             <form onSubmit={handleVerifyOtp}>
               <h2 className="text-2xl font-extrabold text-gray-900 mb-1">Enter OTP</h2>
               <p className="text-gray-500 text-sm mb-6">
-                We sent a 6-digit code to <span className="font-semibold text-gray-700">+91 {phone}</span>
+                We sent a 6-digit code to <span className="font-semibold text-gray-700">{getFullPhone()}</span>
               </p>
 
               <div className="mb-5">

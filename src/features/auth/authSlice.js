@@ -15,9 +15,9 @@ const authSlice = createSlice({
   reducers: {
     setCredentials: (state, action) => {
       const { user, token, refreshToken } = action.payload
-      state.user = user
-      state.token = token
-      state.refreshToken = refreshToken ?? state.refreshToken
+      if (user) state.user = user
+      if (token) state.token = token
+      if (refreshToken) state.refreshToken = refreshToken
       state.isAuthenticated = true
       state.error = null
       state.loading = false
