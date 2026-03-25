@@ -1,25 +1,19 @@
 import axiosInstance from './axiosInstance'
 
-// Send OTP to phone number
 export const sendOtp = (phone) =>
-  axiosInstance.post('/api/auth/users/send-otp/', { phone })
+  axiosInstance.post('/api/v1/users/send-otp/', { phone })
 
-// Verify OTP — returns { access, refresh, user }
 export const verifyOtp = (phone, otp) =>
-  axiosInstance.post('/api/auth/users/verify-otp/', { phone, otp })
+  axiosInstance.post('/api/v1/auth/users/verify-otp/', { phone, otp })
 
-// Refresh JWT access token
 export const refreshAccessToken = (refresh) =>
-  axiosInstance.post('/api/auth/token/refresh/', { refresh })
+  axiosInstance.post('/api/v1/auth/token/refresh/', { refresh })
 
-// Get current user profile
 export const getProfile = () =>
-  axiosInstance.get('/api/auth/users/me/')
+  axiosInstance.get('/api/v1/auth/users/me/')
 
-// Update profile
 export const updateProfile = (data) =>
-  axiosInstance.patch('/api/auth/users/me/', data)
+  axiosInstance.patch('/api/v1/auth/users/me/', data)
 
-// Register new user (if signup flow)
 export const registerUser = (data) =>
-  axiosInstance.post('/api/auth/users/register/', data)
+  axiosInstance.post('/api/v1/auth/users/register/', data)
