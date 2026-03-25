@@ -42,7 +42,7 @@ const LoginPage = () => {
 
   const validatePhone = (val) => {
     const clean = val.replace(/\D/g, '')
-    if (!clean || clean.length < 10) return 'Enter a valid 10-digit mobile number'
+    if (!clean || clean.length < 9) return 'Enter a valid 10-digit mobile number'
     return ''
   }
 
