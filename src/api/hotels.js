@@ -1,21 +1,22 @@
 import axiosInstance from './axiosInstance'
 
-// Public hotel list — pass search params
 export const getHotels = (params = {}) =>
-  axiosInstance.get('/api/properties/hotels/', { params })
+  axiosInstance.get('/api/v1/property/public/hotels/home/', { params })
 
-// Single hotel detail
+export const searchHotels = (params = {}) =>
+  axiosInstance.get('/api/v1/property/public/hotels/search/', { params })
+
 export const getHotelDetail = (id) =>
-  axiosInstance.get(`/api/properties/hotels/${id}/`)
+  axiosInstance.get(`/api/v1/property/public/hotels/${id}/`)
 
-// Hotel rooms for a property
-export const getHotelRooms = (hotelId, params = {}) =>
-  axiosInstance.get(`/api/properties/hotels/${hotelId}/rooms/`, { params })
+export const getHotelAvailability = (id, params = {}) =>
+  axiosInstance.get(`/api/v1/property/public/hotels/${id}/availability/`, { params })
 
-// Room detail
-export const getRoomDetail = (hotelId, roomId) =>
-  axiosInstance.get(`/api/properties/hotels/${hotelId}/rooms/${roomId}/`)
+export const getHotelSlots = (id, params = {}) =>
+  axiosInstance.get(`/api/v1/property/public/hotels/${id}/available-slots/`, { params })
 
-// Check availability
-export const checkAvailability = (params) =>
-  axiosInstance.post('/api/properties/check-availability/', params)
+export const checkPrice = (data) =>
+  axiosInstance.post('/api/v1/property/public/bookings/price-check/', data)
+
+export const getSearchSuggestions = (params = {}) =>
+  axiosInstance.get('/api/v1/property/public/search/suggestions/', { params })

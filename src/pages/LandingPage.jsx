@@ -2,76 +2,9 @@ import SearchBar from '@/components/SearchBar'
 import HotelCard from '@/components/HotelCard'
 import MainLayout from '@/layouts/MainLayout'
 import { Sparkles, Clock, Shield, Smartphone } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { getHotels } from '@/api/hotels'
 
-// Demo hotel data matching the Web_Design reference
-const DEMO_HOTELS = [
-  {
-    id: 1,
-    name: 'Verification Hotel',
-    location: 'Kochi Updated, Kerala',
-    rating: 0,
-    price: 1,
-    price_display: '₹1 / 3 hr',
-    extra_price_display: '+₹11 / extra hr',
-    image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&h=400&fit=crop',
-    amenities: ['TV', 'WiFi', 'AC'],
-  },
-  {
-    id: 2,
-    name: 'Grand Plaza Suites',
-    location: 'MG Road, Kochi',
-    rating: 4.5,
-    price: 349,
-    price_display: '₹349 / 3 hr',
-    extra_price_display: '+₹99 / extra hr',
-    image: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=600&h=400&fit=crop',
-    amenities: ['WiFi', 'Restaurant', 'Parking'],
-  },
-  {
-    id: 3,
-    name: 'Harbor Luxe Inn',
-    location: 'Marine Drive, Kochi',
-    rating: 4.8,
-    price: 499,
-    price_display: '₹499 / 3 hr',
-    extra_price_display: '+₹129 / extra hr',
-    image: 'https://images.unsplash.com/photo-1582719508461-905c673771fd?w=600&h=400&fit=crop',
-    amenities: ['Pool', 'Wifi', 'AC'],
-  },
-  {
-    id: 4,
-    name: 'Metro Flexi Stay',
-    location: 'Kaloor, Kochi',
-    rating: 3.9,
-    price: 199,
-    price_display: '₹199 / 3 hr',
-    extra_price_display: '+₹59 / extra hr',
-    image: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=600&h=400&fit=crop',
-    amenities: ['WiFi', 'AC'],
-  },
-  {
-    id: 5,
-    name: 'Airport Transit Hub',
-    location: 'Cochin Airport',
-    rating: 4.2,
-    price: 250,
-    price_display: '₹250 / 3 hr',
-    extra_price_display: '+₹75 / extra hr',
-    image: 'https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=600&h=400&fit=crop',
-    amenities: ['WiFi', 'Parking'],
-  },
-  {
-    id: 6,
-    name: 'Palm Grove Residency',
-    location: 'Edappally, Kochi',
-    rating: 4.3,
-    price: 399,
-    price_display: '₹399 / 3 hr',
-    extra_price_display: '+₹89 / extra hr',
-    image: 'https://images.unsplash.com/photo-1564501049412-61c2a3083791?w=600&h=400&fit=crop',
-    amenities: ['Restaurant', 'WiFi', 'AC'],
-  },
-]
 
 const USP_FEATURES = [
   {
@@ -101,6 +34,24 @@ const USP_FEATURES = [
 ]
 
 const LandingPage = () => {
+  const [hotels, setHotels] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect (() => {
+    const fetchHotels = async () => {
+      try{
+        const res = await getHotels()
+        console.log('Hotels', res.data)
+        setHotels(res.data.results || res.data)
+      } catch (err) {
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchHotels()
+  },[])
+
   return (
     <MainLayout>
       {/* Hero Section */}
@@ -200,9 +151,15 @@ const LandingPage = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {DEMO_HOTELS.map((hotel) => (
-              <HotelCard key={hotel.id} hotel={hotel} />
-            ))}
+            {loading ? (
+              <p>Loading hotels...</p>
+            ) : hotels.length === 0 ? (
+              <p>No hotels found</p>
+            ) : (
+              hotels.map((hotel) => (
+                <HotelCard key={hotel.id} hotel={hotel} />
+              ))
+            )}
           </div>
         </div>
       </section>
