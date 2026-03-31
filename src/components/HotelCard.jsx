@@ -1,7 +1,9 @@
 import { useDispatch, useSelector } from 'react-redux'
 import { Link } from 'react-router-dom'
 import { Heart, MapPin, Star, Clock, Wifi, Tv, Wind, Car, Utensils, Waves, Moon } from 'lucide-react'
-import { toggleWishlist, selectIsWishlisted } from '@/features/wishlist/wishlistSlice'
+import { optimisticToggle, toggleWishlistApi, selectIsWishlisted } from '@/features/wishlist/wishlistSlice'
+import { selectIsAuthenticated } from '@/features/auth/authSlice'
+import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
 
 const amenityIconMap = {
@@ -27,11 +29,21 @@ const formatCurrency = (amount, currency = 'INR') => {
 const HotelCard = ({ hotel }) => {
   const dispatch = useDispatch()
   const isWishlisted = useSelector(selectIsWishlisted(hotel.id))
+  const isAuthenticated = useSelector(selectIsAuthenticated)
 
   const handleWishlist = (e) => {
     e.preventDefault()
     e.stopPropagation()
-    dispatch(toggleWishlist(hotel))
+    
+    if (!isAuthenticated) {
+      toast.error('Please sign in to save hotels to your wishlist')
+      return
+    }
+    
+    dispatch(optimisticToggle(hotel))
+    dispatch(toggleWishlistApi(hotel)).unwrap().catch((err) => {
+      toast.error(err.error?.error || 'Failed to update wishlist. Please try again.')
+    })
   }
 
   const { pricing, availability, location, images, average_rating } = hotel
