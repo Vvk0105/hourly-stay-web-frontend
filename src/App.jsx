@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
+import ScrollToTop from '@/components/ScrollToTop'
 import LandingPage from '@/pages/LandingPage'
 import LoginPage from '@/pages/LoginPage'
 import HotelsPage from '@/pages/HotelsPage'
@@ -14,6 +15,7 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 function App() {
   return (
     <>
+      <ScrollToTop />
       <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
       <Routes>
         {/* Public routes */}
@@ -22,7 +24,7 @@ function App() {
         <Route path="/hotels" element={<HotelsPage />} />
         <Route path="/hotels/:id" element={<HotelDetailPage />} />
 
-        {/* Booking flow — breakdown is public (allows guest booking), success and my-bookings require auth */}
+        {/* Booking flow */}
         <Route path="/booking/breakdown" element={<BookingBreakdownPage />} />
         <Route path="/booking/success" element={<BookingSuccessPage />} />
 

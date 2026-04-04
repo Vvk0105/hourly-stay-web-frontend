@@ -5,7 +5,8 @@ import { Phone, KeyRound, ArrowRight, Clock, CheckCircle } from 'lucide-react'
 import { setCredentials, setAuthLoading, setAuthError } from '@/features/auth/authSlice'
 import { useAuth } from '@/hooks/useAuth'
 import { useNotify } from '@/hooks/useNotify'
-import { sendOtp, verifyOtp } from '@/api/auth'
+import { sendOtp, verifyOtp, googleLogin } from '@/api/auth'
+import { GoogleLogin } from '@react-oauth/google'
 import { cn } from '@/utils/cn'
 
 const STEPS = { PHONE: 'phone', OTP: 'otp' }
@@ -89,6 +90,28 @@ const LoginPage = () => {
       const msg = error.response?.data?.message ?? error.response?.data?.detail ?? 'Invalid OTP. Please try again.'
       dispatch(setAuthError(msg))
       setOtpError(msg)
+    } finally {
+      dispatch(setAuthLoading(false))
+    }
+  }
+
+  const handleGoogleSuccess = async (credentialResponse) => {
+    try {
+      dispatch(setAuthLoading(true))
+      const res = await googleLogin(credentialResponse.credential)
+      dispatch(setCredentials({
+        user: res.data.user,
+        token: res.data.access,
+        refreshToken: res.data.refresh,
+      }))
+      notify.success(`Welcome, ${res.data.user?.username ?? 'there'}!`)
+      navigate(from, { replace: true })
+    } catch (error) {
+      const msg = error.response?.data?.error || error.response?.data?.detail || 'Google sign in failed.'
+      dispatch(setAuthError(msg))
+      notify.error(msg)
+    } finally {
+      dispatch(setAuthLoading(false))
     }
   }
 
@@ -249,6 +272,24 @@ const LoginPage = () => {
               </div>
             </form>
           )}
+
+          {/* Social Login Separator */}
+          <div className="relative flex items-center py-5">
+            <div className="flex-grow border-t border-gray-200"></div>
+            <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-semibold uppercase">Or continue with</span>
+            <div className="flex-grow border-t border-gray-200"></div>
+          </div>
+
+          <div className="flex justify-center">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => notify.error('Google login failed')}
+              useOneTap
+              shape="pill"
+              theme="outline"
+              size="large"
+            />
+          </div>
         </div>
 
         <p className="text-center text-gray-500 text-xs mt-6">

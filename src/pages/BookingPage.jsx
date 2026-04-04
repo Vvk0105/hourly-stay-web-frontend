@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import MainLayout from '@/layouts/MainLayout'
-import { getMyBookings, getRefundPreview, cancelBooking } from '@/api/bookingApi'
+import { getMyBookings, getRefundPreview, cancelBooking, createReview } from '@/api/bookingApi'
 import {
   Clock, Moon, Calendar, Hotel, MapPin, ChevronDown, ChevronUp,
   Loader2, FileText, AlertCircle, CheckCircle, XCircle, X,
@@ -143,10 +143,79 @@ const RefundPreviewModal = ({ booking, onClose, onCancel }) => {
   )
 }
 
+// ──── Review Modal ────────────────────────────────────────
+const ReviewModal = ({ booking, onClose, onSuccess }) => {
+  const [rating, setRating] = useState(5)
+  const [comment, setComment] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async () => {
+    if (!comment.trim()) { toast.error('Please enter a comment'); return }
+    setSubmitting(true)
+    try {
+      await createReview({
+        booking_id: booking.id,
+        rating,
+        comment: comment.trim(),
+      })
+      toast.success('Review submitted successfully!')
+      onSuccess()
+      onClose()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to submit review')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <h2 className="text-lg font-extrabold text-gray-900">Leave a Review</h2>
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+        <div className="p-6 space-y-5">
+          <div className="flex justify-center gap-2">
+            {[1, 2, 3, 4, 5].map(r => (
+              <button key={r} onClick={() => setRating(r)}
+                className="focus:outline-none transition-transform hover:scale-110">
+                <Star className={cn("w-8 h-8", r <= rating ? "fill-amber-400 text-amber-400" : "text-gray-200")} />
+              </button>
+            ))}
+          </div>
+          <div>
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5 block">
+              Comment
+            </label>
+            <textarea
+              value={comment}
+              onChange={e => setComment(e.target.value)}
+              placeholder="How was your stay?"
+              rows={3}
+              className="w-full p-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-brand-400 resize-none"
+            />
+          </div>
+          <button onClick={handleSubmit} disabled={submitting}
+            className="w-full py-3 rounded-2xl text-white font-bold text-sm disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+            style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+            {submitting ? 'Submitting...' : 'Submit Review'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ──── Single Booking Card ─────────────────────────────────────────
 const BookingCard = ({ booking, onRefresh }) => {
   const [expanded, setExpanded] = useState(false)
   const [showRefundModal, setShowRefundModal] = useState(false)
+  const [showReviewModal, setShowReviewModal] = useState(false)
 
   const status = STATUS_CONFIG[booking.status] ?? STATUS_CONFIG.CONFIRMED
   const StatusIcon = status.icon
@@ -161,6 +230,13 @@ const BookingCard = ({ booking, onRefresh }) => {
           booking={booking}
           onClose={() => setShowRefundModal(false)}
           onCancel={onRefresh}
+        />
+      )}
+      {showReviewModal && (
+        <ReviewModal
+          booking={booking}
+          onClose={() => setShowReviewModal(false)}
+          onSuccess={onRefresh}
         />
       )}
 
@@ -270,10 +346,10 @@ const BookingCard = ({ booking, onRefresh }) => {
                 </button>
               )}
               {booking.status === 'CHECKED_OUT' && !booking.review && (
-                <Link to={`/review/${booking.id}`}
+                <button onClick={() => setShowReviewModal(true)}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-amber-200 text-amber-600 text-xs font-semibold hover:bg-amber-50 transition-colors">
                   <Star className="w-3.5 h-3.5" />Leave Review
-                </Link>
+                </button>
               )}
             </div>
           </div>

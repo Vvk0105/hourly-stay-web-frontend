@@ -22,3 +22,10 @@ export const cancelBooking = (bookingId, reason = '') =>
     action: 'CANCEL',
     reason,
   })
+
+// Reviews
+export const createReview = (data) =>
+  axiosInstance.post('/api/v1/booking/reviews/', data)
+
+export const getHotelReviews = (hotelId) =>
+  axiosInstance.get(`/api/v1/booking/hotels/${hotelId}/reviews/`)

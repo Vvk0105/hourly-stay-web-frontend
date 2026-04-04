@@ -6,6 +6,9 @@ export const sendOtp = (phone_number) =>
 export const verifyOtp = (phone_number, otp) =>
   axiosInstance.post('/api/v1/users/verify-otp/', { phone_number, otp })
 
+export const googleLogin = (id_token) =>
+  axiosInstance.post('/api/v1/users/auth/google/', { id_token })
+
 export const refreshAccessToken = (refresh) =>
   axiosInstance.post('/api/v1/users/refresh/', { refresh })
 

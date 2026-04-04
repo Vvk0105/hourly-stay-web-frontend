@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import MainLayout from '@/layouts/MainLayout'
 import { getHotelDetail, checkPrice } from '@/api/hotels'
+import { getHotelReviews } from '@/api/bookingApi'
 import { selectCurrentUser, selectIsAuthenticated } from '@/features/auth/authSlice'
 import { selectUserCurrency } from '@/features/search/searchSlice'
 import {
@@ -412,14 +413,19 @@ const HotelDetailPage = () => {
   const [imgIndex, setImgIndex] = useState(0)
   const [showBookingModal, setShowBookingModal] = useState(false)
   const [preselectedRoom, setPreselectedRoom] = useState(null)
+  const [reviews, setReviews] = useState([])
 
   useEffect(() => {
     const fetch = async () => {
       setLoading(true)
       setError(null)
       try {
-        const res = await getHotelDetail(id)
+        const [res, reviewsRes] = await Promise.all([
+          getHotelDetail(id),
+          getHotelReviews(id).catch(() => ({ data: [] }))
+        ])
         setHotel(res.data)
+        setReviews(reviewsRes.data?.results || reviewsRes.data || [])
       } catch (err) {
         console.error('Hotel detail fetch error:', err)
         setError('Failed to load hotel details.')
@@ -601,6 +607,34 @@ const HotelDetailPage = () => {
                 <div className="space-y-4">
                   {room_types.map(room => (
                     <RoomTypeCard key={room.id} room={room} currency={currency} onBook={handleBookRoom} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Reviews Section */}
+            {reviews.length > 0 && (
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <Star className="w-5 h-5 text-brand-500 fill-brand-500" />
+                  Guest Reviews
+                  <span className="text-sm font-normal text-gray-500">({reviews.length})</span>
+                </h2>
+                <div className="space-y-4">
+                  {reviews.map((rev, i) => (
+                    <div key={i} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-gray-900 text-sm">{rev.user_name || 'Guest'}</span>
+                          <span className="text-xs text-gray-400">{}</span>
+                        </div>
+                        <div className="flex items-center gap-1 bg-amber-50 px-2.5 py-1 rounded-full text-amber-600 font-bold text-xs ring-1 ring-amber-200">
+                          <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                          {rev.rating}/5
+                        </div>
+                      </div>
+                      <p className="text-gray-600 text-sm mt-2">{rev.comment}</p>
+                    </div>
                   ))}
                 </div>
               </div>
