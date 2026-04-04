@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { Heart, Bell, User, LogOut, Clock, Menu, X } from 'lucide-react'
 import { useState } from 'react'
 import { logout } from '@/features/auth/authSlice'
-import { selectWishlistCount } from '@/features/wishlist/wishlistSlice'
+import { clearWishlist, selectWishlistCount } from '@/features/wishlist/wishlistSlice'
 import { selectUnreadCount } from '@/features/notifications/notificationsSlice'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/utils/cn'
@@ -19,6 +19,7 @@ const Navbar = () => {
 
   const handleLogout = () => {
     dispatch(logout())
+    dispatch(clearWishlist())
     navigate('/')
     setUserMenuOpen(false)
   }

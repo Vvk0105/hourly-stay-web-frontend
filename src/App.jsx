@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import ScrollToTop from '@/components/ScrollToTop'
@@ -11,8 +13,20 @@ import BookingBreakdownPage from '@/pages/BookingBreakdownPage'
 import BookingSuccessPage from '@/pages/BookingSuccessPage'
 import ProfilePage from '@/pages/ProfilePage'
 import ProtectedRoute from '@/components/ProtectedRoute'
+import { fetchWishlist } from '@/features/wishlist/wishlistSlice'
+import { selectIsAuthenticated } from '@/features/auth/authSlice'
 
 function App() {
+  const dispatch = useDispatch()
+  const isAuthenticated = useSelector(selectIsAuthenticated)
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      dispatch(fetchWishlist())
+      // Also potentially fetch notifications here in future
+    }
+  }, [isAuthenticated, dispatch])
+
   return (
     <>
       <ScrollToTop />
