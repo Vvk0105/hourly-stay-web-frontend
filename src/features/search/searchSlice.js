@@ -12,6 +12,12 @@ const initialState = {
     rating: 0,          // minimum rating
     sortBy: 'recommended', // 'recommended' | 'price_asc' | 'price_desc' | 'rating'
   },
+  // Geolocation — populated from detect-location API on app load
+  userLat: null,
+  userLng: null,
+  userCurrency: 'INR',
+  userCountryCode: 'IN',
+  locationDetected: false,
 }
 
 const searchSlice = createSlice({
@@ -58,6 +64,22 @@ const searchSlice = createSlice({
     setRatingFilter: (state, action) => {
       state.filters.rating = action.payload
     },
+    // Set geolocation from detect-location API
+    setUserLocation: (state, action) => {
+      const { lat, lng, currency, country_code, city } = action.payload
+      state.userLat = lat
+      state.userLng = lng
+      state.userCurrency = currency || 'INR'
+      state.userCountryCode = country_code || 'IN'
+      state.locationDetected = true
+      if (city && !state.city) state.city = city
+    },
+    // Override lat/lng from suggestion selection
+    setSearchCoords: (state, action) => {
+      state.userLat = action.payload.lat
+      state.userLng = action.payload.lng
+      if (action.payload.label) state.city = action.payload.label
+    },
     resetSearch: () => initialState,
   },
 })
@@ -74,6 +96,8 @@ export const {
   setAmenityFilter,
   setSortBy,
   setRatingFilter,
+  setUserLocation,
+  setSearchCoords,
   resetSearch,
 } = searchSlice.actions
 
@@ -85,12 +109,20 @@ export const selectGuests = (state) => state.search.guests
 export const selectBookingMode = (state) => state.search.bookingMode
 export const selectPriceRange = (state) => state.search.priceRange
 export const selectFilters = (state) => state.search.filters
+export const selectUserLat = (state) => state.search.userLat
+export const selectUserLng = (state) => state.search.userLng
+export const selectUserCurrency = (state) => state.search.userCurrency
+export const selectUserCountryCode = (state) => state.search.userCountryCode
+export const selectLocationDetected = (state) => state.search.locationDetected
 export const selectSearchParams = (state) => ({
   city: state.search.city,
   checkIn: state.search.checkIn,
   checkOut: state.search.checkOut,
   guests: state.search.guests,
   bookingMode: state.search.bookingMode,
+  userLat: state.search.userLat,
+  userLng: state.search.userLng,
+  userCurrency: state.search.userCurrency,
 })
 
 export default searchSlice.reducer

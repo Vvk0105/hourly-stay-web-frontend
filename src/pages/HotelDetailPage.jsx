@@ -1,41 +1,41 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useDispatch, useSelector } from 'react-redux'
 import MainLayout from '@/layouts/MainLayout'
-import { getHotelDetail } from '@/api/hotels'
+import { getHotelDetail, checkPrice } from '@/api/hotels'
+import { selectCurrentUser, selectIsAuthenticated } from '@/features/auth/authSlice'
+import { selectUserCurrency } from '@/features/search/searchSlice'
 import {
   MapPin, Star, Clock, Moon, Users, ChevronLeft, ChevronRight,
   Wifi, Tv, Wind, Car, Utensils, Waves, Shield, ArrowLeft,
-  Loader2, CalendarDays, Info, CheckCircle
+  Loader2, CalendarDays, Info, CheckCircle, X, CreditCard,
+  Heart, AlertCircle
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
+import toast from 'react-hot-toast'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
 const amenityIconMap = {
-  WIFI: Wifi, WiFi: Wifi,
-  TV: Tv,
-  AC: Wind,
-  Parking: Car,
-  Restaurant: Utensils,
-  Pool: Waves,
+  WIFI: Wifi, WiFi: Wifi, TV: Tv, AC: Wind,
+  Parking: Car, Restaurant: Utensils, Pool: Waves,
 }
 
 const formatTime = (isoStr) => {
   if (!isoStr) return ''
-  const d = new Date(isoStr)
-  return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return new Date(isoStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 const formatCurrency = (amount, currency = 'INR') => {
-  const symbol = currency === 'USD' ? '$' : '₹'
-  return `${symbol}${Number(amount).toLocaleString('en-IN')}`
+  if (!amount && amount !== 0) return '—'
+  const symbols = { INR: '₹', USD: '$', AED: 'د.إ', GBP: '£', SGD: 'S$', AUD: 'A$' }
+  const sym = symbols[currency] ?? currency + ' '
+  return `${sym}${Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 }
 
-// Slot UI matching the screenshot
-const SlotSection = ({ slotsData, currency }) => {
+const SlotSection = ({ slotsData }) => {
   if (!slotsData?.slots?.length) return null
   const { slots, min_duration_hours } = slotsData
-
   return (
     <div className="bg-blue-50 rounded-2xl p-4">
       <div className="flex items-center justify-between mb-3">
@@ -53,13 +53,8 @@ const SlotSection = ({ slotsData, currency }) => {
       </div>
       <div className="flex flex-wrap gap-2">
         {slots.map((slot, i) => (
-          <div
-            key={i}
-            className="bg-white rounded-xl px-4 py-2.5 shadow-sm border border-blue-100 min-w-[130px]"
-          >
-            <p className="text-sm font-bold text-gray-800">
-              {formatTime(slot.start)} – {formatTime(slot.end)}
-            </p>
+          <div key={i} className="bg-white rounded-xl px-4 py-2.5 shadow-sm border border-blue-100 min-w-[130px]">
+            <p className="text-sm font-bold text-gray-800">{formatTime(slot.start)} – {formatTime(slot.end)}</p>
             <p className="text-xs text-gray-400 mt-0.5">{Math.floor(slot.duration_hours)} hrs</p>
           </div>
         ))}
@@ -68,15 +63,277 @@ const SlotSection = ({ slotsData, currency }) => {
   )
 }
 
-// Room type card
-const RoomTypeCard = ({ room, currency }) => {
-  const hourly = room.pricing?.hourly
-  const nightly = room.pricing?.nightly
-  const isHourlyEnabled = hourly?.is_enabled
+// ─────────────────────────────── BOOKING MODAL ───────────────────────────────
+const BookingModal = ({ hotel, roomTypes, currency, onClose }) => {
+  const navigate = useNavigate()
+  const user = useSelector(selectCurrentUser)
+  const isAuthenticated = useSelector(selectIsAuthenticated)
+
+  const [step, setStep] = useState(1) // 1=type, 2=dates, 3=guests, 4=price check
+  const [bookingType, setBookingType] = useState('HOURLY')
+  const [selectedRoomType, setSelectedRoomType] = useState(roomTypes?.[0] || null)
+  const [checkIn, setCheckIn] = useState('')
+  const [checkOut, setCheckOut] = useState('')
+  const [adults, setAdults] = useState(1)
+  const [children, setChildren] = useState(0)
+  const [rooms, setRooms] = useState(1)
+  const [priceResult, setPriceResult] = useState(null)
+  const [calculating, setCalculating] = useState(false)
+
+  const minDateTime = new Date().toISOString().slice(0, 16)
+
+  const hourlyRoomTypes = roomTypes?.filter(r => r.pricing?.hourly?.is_enabled) ?? []
+  const nightlyRoomTypes = roomTypes ?? []
+  const availableRooms = bookingType === 'HOURLY' ? hourlyRoomTypes : nightlyRoomTypes
+
+  useEffect(() => {
+    if (availableRooms.length > 0 && !availableRooms.find(r => r.id === selectedRoomType?.id)) {
+      setSelectedRoomType(availableRooms[0])
+    }
+  }, [bookingType])
+
+  const handlePriceCheck = async () => {
+    if (!checkIn || !checkOut) {
+      toast.error('Please select check-in and check-out times')
+      return
+    }
+    setCalculating(true)
+    try {
+      const payload = {
+        hotel_id: hotel.id,
+        room_type_id: selectedRoomType.id,
+        booking_type: bookingType,
+        check_in: checkIn,
+        check_out: checkOut,
+        rooms_count: rooms,
+        adults_count: adults,
+        children_count: children,
+        user_currency: currency,
+      }
+      const res = await checkPrice(payload)
+      setPriceResult(res.data)
+      setStep(4)
+    } catch (err) {
+      const msg = err.response?.data?.error || err.response?.data?.non_field_errors?.[0] || 'Failed to calculate price'
+      toast.error(msg)
+    } finally {
+      setCalculating(false)
+    }
+  }
+
+  const handleProceed = () => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to book')
+      navigate('/login')
+      return
+    }
+    const params = new URLSearchParams({
+      hotel_id: hotel.id,
+      hotel_name: hotel.name,
+      room_type_id: selectedRoomType.id,
+      room_type_name: selectedRoomType.name,
+      booking_type: bookingType,
+      check_in: checkIn,
+      check_out: checkOut,
+      adults,
+      children,
+      rooms,
+      currency,
+      base_amount: priceResult.base_amount,
+      tax_amount: priceResult.tax_amount,
+      discount_amount: priceResult.discount_amount ?? 0,
+      total_amount: priceResult.total_amount,
+    })
+    navigate(`/booking/breakdown?${params.toString()}`)
+  }
 
   return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <div>
+            <h2 className="text-xl font-extrabold text-gray-900">Book Your Stay</h2>
+            <p className="text-sm text-gray-500 mt-0.5">{hotel.name}</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {/* Step 1: Booking Type */}
+          <div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Stay Type</p>
+            <div className="grid grid-cols-2 gap-3">
+              {['HOURLY', 'NIGHTLY'].map(type => (
+                <button key={type}
+                  onClick={() => setBookingType(type)}
+                  className={cn(
+                    'flex items-center gap-2 p-3 rounded-2xl border-2 transition-all font-semibold text-sm',
+                    bookingType === type
+                      ? 'border-brand-500 bg-brand-50 text-brand-700'
+                      : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                  )}>
+                  {type === 'HOURLY' ? <Clock className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  {type === 'HOURLY' ? 'Hourly' : 'Nightly'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Room Type */}
+          <div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Room Type</p>
+            {availableRooms.length === 0 ? (
+              <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-700 text-sm">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                No {bookingType.toLowerCase()} rooms available for this hotel.
+              </div>
+            ) : (
+              <select
+                value={selectedRoomType?.id ?? ''}
+                onChange={e => setSelectedRoomType(availableRooms.find(r => r.id === parseInt(e.target.value)))}
+                className="w-full p-3 rounded-xl border border-gray-200 text-sm font-medium outline-none focus:border-brand-400 bg-white"
+              >
+                {availableRooms.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} — {bookingType === 'HOURLY'
+                      ? formatCurrency(r.pricing?.hourly?.base_price, currency) + '/hr'
+                      : formatCurrency(r.pricing?.nightly?.base_price, currency) + '/night'}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
+                {bookingType === 'HOURLY' ? 'Check-in Time' : 'Check-in Date'}
+              </p>
+              <input
+                type={bookingType === 'HOURLY' ? 'datetime-local' : 'date'}
+                value={checkIn}
+                min={minDateTime}
+                onChange={e => { setCheckIn(e.target.value); setPriceResult(null); setStep(Math.min(step, 3)) }}
+                className="w-full p-3 rounded-xl border border-gray-200 text-sm outline-none focus:border-brand-400"
+              />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
+                {bookingType === 'HOURLY' ? 'Check-out Time' : 'Check-out Date'}
+              </p>
+              <input
+                type={bookingType === 'HOURLY' ? 'datetime-local' : 'date'}
+                value={checkOut}
+                min={checkIn || minDateTime}
+                onChange={e => { setCheckOut(e.target.value); setPriceResult(null); setStep(Math.min(step, 3)) }}
+                className="w-full p-3 rounded-xl border border-gray-200 text-sm outline-none focus:border-brand-400"
+              />
+            </div>
+          </div>
+
+          {/* Guests */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Rooms', value: rooms, set: setRooms, min: 1, max: 10 },
+              { label: 'Adults', value: adults, set: setAdults, min: 1, max: 10 },
+              { label: 'Children', value: children, set: setChildren, min: 0, max: 10 },
+            ].map(({ label, value, set, min, max }) => (
+              <div key={label}>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">{label}</p>
+                <div className="flex items-center gap-2 border border-gray-200 rounded-xl p-2">
+                  <button onClick={() => set(v => Math.max(min, v - 1))}
+                    className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors font-bold text-gray-600">
+                    −
+                  </button>
+                  <span className="flex-1 text-center font-semibold text-sm">{value}</span>
+                  <button onClick={() => set(v => Math.min(max, v + 1))}
+                    className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors font-bold text-gray-600">
+                    +
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Price Result */}
+          {priceResult && step === 4 && (
+            <div className="bg-gradient-to-br from-brand-50 to-indigo-50 rounded-2xl p-4 border border-brand-100">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Price Breakdown</p>
+              <div className="space-y-1.5 text-sm">
+                <div className="flex justify-between text-gray-600">
+                  <span>Base amount</span>
+                  <span>{formatCurrency(priceResult.base_amount, priceResult.currency || currency)}</span>
+                </div>
+                {priceResult.discount_amount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Discount</span>
+                    <span>−{formatCurrency(priceResult.discount_amount, priceResult.currency || currency)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-gray-600">
+                  <span>Taxes & fees</span>
+                  <span>{formatCurrency(priceResult.tax_amount, priceResult.currency || currency)}</span>
+                </div>
+                <div className="flex justify-between font-extrabold text-gray-900 text-base pt-2 border-t border-brand-200 mt-2">
+                  <span>Total</span>
+                  <span className="text-brand-700">{formatCurrency(priceResult.total_amount, priceResult.currency || currency)}</span>
+                </div>
+                {priceResult.converted_total && (
+                  <p className="text-xs text-gray-400 text-right">
+                    ≈ {formatCurrency(priceResult.converted_total, priceResult.converted_currency)}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-2">
+            {step < 4 || !priceResult ? (
+              <button
+                onClick={handlePriceCheck}
+                disabled={calculating || !checkIn || !checkOut || availableRooms.length === 0}
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-bold text-base disabled:opacity-50 transition-all"
+                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+              >
+                {calculating ? <Loader2 className="w-5 h-5 animate-spin" /> : <CreditCard className="w-5 h-5" />}
+                {calculating ? 'Calculating...' : 'Check Price'}
+              </button>
+            ) : (
+              <>
+                <button onClick={() => { setPriceResult(null); setStep(3) }}
+                  className="px-4 py-3.5 rounded-2xl border-2 border-gray-200 text-gray-600 font-bold text-sm hover:bg-gray-50 transition-colors">
+                  Back
+                </button>
+                <button
+                  onClick={handleProceed}
+                  className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-bold text-base transition-all"
+                  style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+                >
+                  <CreditCard className="w-5 h-5" />
+                  Confirm & Book
+                </button>
+              </>
+            )}
+          </div>
+          <p className="text-center text-xs text-gray-400">Instant confirmation · No hidden fees</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ────────────────────────────── ROOM TYPE CARD ──────────────────────────────
+const RoomTypeCard = ({ room, currency, onBook }) => {
+  const hourly = room.pricing?.hourly
+  const nightly = room.pricing?.nightly
+  return (
     <div className="border border-gray-200 rounded-2xl p-5 hover:border-brand-300 hover:shadow-md transition-all">
-      {/* Room name & capacity */}
       <div className="flex items-start justify-between mb-3">
         <div>
           <h4 className="font-bold text-gray-900">{room.name}</h4>
@@ -88,10 +345,8 @@ const RoomTypeCard = ({ room, currency }) => {
           {room.capacity?.max_children > 0 && <span>+ {room.capacity.max_children} child</span>}
         </div>
       </div>
-
-      {/* Pricing */}
       <div className="flex flex-wrap gap-4 mb-4">
-        {hourly && isHourlyEnabled && (
+        {hourly?.is_enabled && (
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-brand-50 rounded-lg flex items-center justify-center">
               <Clock className="w-4 h-4 text-brand-600" />
@@ -102,11 +357,6 @@ const RoomTypeCard = ({ room, currency }) => {
                 {formatCurrency(hourly.base_price, currency)}
                 <span className="text-gray-400 font-normal text-xs"> / {hourly.min_duration_hours}hr</span>
               </p>
-              {hourly.price_per_extra_hour && (
-                <p className="text-xs text-amber-600 font-medium">
-                  +{formatCurrency(hourly.price_per_extra_hour, currency)}/extra hr
-                </p>
-              )}
             </div>
           </div>
         )}
@@ -125,8 +375,6 @@ const RoomTypeCard = ({ room, currency }) => {
           </div>
         )}
       </div>
-
-      {/* Amenities */}
       {room.amenities?.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-4">
           {room.amenities.map(a => {
@@ -140,27 +388,30 @@ const RoomTypeCard = ({ room, currency }) => {
           })}
         </div>
       )}
-
-      {/* Slots for this room type */}
-      {room.available_slots?.slots?.length > 0 && (
-        <SlotSection slotsData={room.available_slots} currency={currency} />
-      )}
-
-      {/* Inventory */}
-      <p className="text-xs text-gray-400 mt-3">
-        {room.capacity?.total_inventory} room{room.capacity?.total_inventory !== 1 ? 's' : ''} available
-      </p>
+      {room.available_slots?.slots?.length > 0 && <SlotSection slotsData={room.available_slots} />}
+      <div className="flex items-center justify-between mt-3">
+        <p className="text-xs text-gray-400">{room.capacity?.total_inventory} room{room.capacity?.total_inventory !== 1 ? 's' : ''} available</p>
+        <button onClick={() => onBook(room)}
+          className="px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-colors">
+          Book This Room
+        </button>
+      </div>
     </div>
   )
 }
 
+// ─────────────────────────────── MAIN PAGE ───────────────────────────────────
 const HotelDetailPage = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const userCurrency = useSelector(selectUserCurrency)
+
   const [hotel, setHotel] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [imgIndex, setImgIndex] = useState(0)
+  const [showBookingModal, setShowBookingModal] = useState(false)
+  const [preselectedRoom, setPreselectedRoom] = useState(null)
 
   useEffect(() => {
     const fetch = async () => {
@@ -179,47 +430,54 @@ const HotelDetailPage = () => {
     fetch()
   }, [id])
 
-  if (loading) {
-    return (
-      <MainLayout>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] text-gray-400">
-          <Loader2 className="w-10 h-10 animate-spin text-brand-500 mb-3" />
-          <p className="font-medium">Loading hotel details...</p>
-        </div>
-      </MainLayout>
-    )
-  }
+  if (loading) return (
+    <MainLayout>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-gray-400">
+        <Loader2 className="w-10 h-10 animate-spin text-brand-500 mb-3" />
+        <p className="font-medium">Loading hotel details...</p>
+      </div>
+    </MainLayout>
+  )
 
-  if (error || !hotel) {
-    return (
-      <MainLayout>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] text-gray-400">
-          <p className="text-red-400 font-medium">{error ?? 'Hotel not found'}</p>
-          <button
-            onClick={() => navigate('/hotels')}
-            className="mt-4 px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"
-          >
-            Back to Hotels
-          </button>
-        </div>
-      </MainLayout>
-    )
-  }
+  if (error || !hotel) return (
+    <MainLayout>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-gray-400">
+        <p className="text-red-400 font-medium">{error ?? 'Hotel not found'}</p>
+        <button onClick={() => navigate('/hotels')}
+          className="mt-4 px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700">
+          Back to Hotels
+        </button>
+      </div>
+    </MainLayout>
+  )
 
   const { pricing, availability, location, operations, policies, room_types, images, average_rating, total_reviews } = hotel
-  const currency = room_types?.[0]?.pricing?.hourly?.base_price ? 'INR' : 'INR'
+  const currency = pricing?.currency || userCurrency || 'INR'
   const allImages = images?.length ? images : []
-  const currentImage = allImages[imgIndex]?.large ?? allImages[imgIndex]?.image ?? `https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200&h=700&fit=crop`
-  const currencyCode = pricing?.hourly ? 'INR' : 'INR'
+  const currentImage = allImages[imgIndex]?.large ?? allImages[imgIndex]?.image
+    ?? `https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200&h=700&fit=crop`
+
+  const handleBookRoom = (room) => {
+    setPreselectedRoom(room)
+    setShowBookingModal(true)
+  }
 
   return (
     <MainLayout>
+      {showBookingModal && (
+        <BookingModal
+          hotel={hotel}
+          roomTypes={room_types}
+          currency={currency}
+          onClose={() => { setShowBookingModal(false); setPreselectedRoom(null) }}
+        />
+      )}
+
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
           <Link to="/hotels" className="flex items-center gap-1 hover:text-brand-600 transition-colors font-medium">
-            <ArrowLeft className="w-4 h-4" />
-            All Hotels
+            <ArrowLeft className="w-4 h-4" />All Hotels
           </Link>
           <span>/</span>
           <span className="text-gray-800 font-semibold">{hotel.name}</span>
@@ -227,40 +485,25 @@ const HotelDetailPage = () => {
 
         {/* Photo Gallery */}
         <div className="relative rounded-3xl overflow-hidden h-72 sm:h-96 mb-6 bg-gray-100">
-          <img
-            src={currentImage}
-            alt={hotel.name}
-            className="w-full h-full object-cover"
-            onError={(e) => { e.target.src = `https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200&h=700&fit=crop` }}
-          />
+          <img src={currentImage} alt={hotel.name} className="w-full h-full object-cover"
+            onError={(e) => { e.target.src = `https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200&h=700&fit=crop` }} />
           {allImages.length > 1 && (
             <>
-              <button
-                onClick={() => setImgIndex(i => (i - 1 + allImages.length) % allImages.length)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
-              >
+              <button onClick={() => setImgIndex(i => (i - 1 + allImages.length) % allImages.length)}
+                className="absolute left-3 top-1/2 -translate-y-1/2 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors">
                 <ChevronLeft className="w-5 h-5" />
               </button>
-              <button
-                onClick={() => setImgIndex(i => (i + 1) % allImages.length)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
-              >
+              <button onClick={() => setImgIndex(i => (i + 1) % allImages.length)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors">
                 <ChevronRight className="w-5 h-5" />
               </button>
               <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
                 {allImages.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setImgIndex(i)}
-                    className={cn('w-2 h-2 rounded-full transition-all', imgIndex === i ? 'bg-white scale-125' : 'bg-white/50')}
-                  />
+                  <button key={i} onClick={() => setImgIndex(i)}
+                    className={cn('w-2 h-2 rounded-full transition-all', imgIndex === i ? 'bg-white scale-125' : 'bg-white/50')} />
                 ))}
               </div>
             </>
-          )}
-          {/* No images fallback overlay */}
-          {allImages.length === 0 && (
-            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
           )}
         </div>
 
@@ -288,19 +531,15 @@ const HotelDetailPage = () => {
                   </div>
                 )}
               </div>
-
-              {/* Availability Badges */}
               <div className="flex flex-wrap gap-2 mt-3">
                 {availability?.hourly?.is_available && (
                   <span className="flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-full">
-                    <CheckCircle className="w-3.5 h-3.5" />
-                    Hourly Available ({availability.hourly.available_rooms} rooms)
+                    <CheckCircle className="w-3.5 h-3.5" />Hourly Available
                   </span>
                 )}
                 {availability?.nightly?.is_available && (
                   <span className="flex items-center gap-1 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-full">
-                    <CheckCircle className="w-3.5 h-3.5" />
-                    Nightly Available ({availability.nightly.available_rooms} rooms)
+                    <CheckCircle className="w-3.5 h-3.5" />Nightly Available
                   </span>
                 )}
               </div>
@@ -314,7 +553,7 @@ const HotelDetailPage = () => {
               </div>
             )}
 
-            {/* Hotel-level Pricing Summary */}
+            {/* Pricing Summary */}
             {pricing && (
               <div>
                 <h2 className="text-lg font-bold text-gray-900 mb-3">Pricing</h2>
@@ -327,14 +566,9 @@ const HotelDetailPage = () => {
                       <div>
                         <p className="text-xs text-gray-500 font-medium">Hourly Stay</p>
                         <p className="font-bold text-brand-700 text-lg">
-                          {formatCurrency(pricing.hourly.starting_from)}
+                          {formatCurrency(pricing.hourly.starting_from, currency)}
                           <span className="text-sm text-gray-500 font-normal"> / {pricing.hourly.min_duration_hours} hrs</span>
                         </p>
-                        {pricing.hourly.price_per_extra_hour && (
-                          <p className="text-xs text-amber-600 font-semibold">
-                            +{formatCurrency(pricing.hourly.price_per_extra_hour)}/extra hr
-                          </p>
-                        )}
                       </div>
                     </div>
                   )}
@@ -346,18 +580,14 @@ const HotelDetailPage = () => {
                       <div>
                         <p className="text-xs text-gray-500 font-medium">Nightly Stay</p>
                         <p className="font-bold text-indigo-700 text-lg">
-                          {formatCurrency(pricing.daily.starting_from)}
+                          {formatCurrency(pricing.daily.starting_from, currency)}
                           <span className="text-sm text-gray-500 font-normal"> / night</span>
                         </p>
                       </div>
                     </div>
                   )}
                 </div>
-
-                {/* Hotel-level available slots */}
-                {pricing.available_slots?.slots?.length > 0 && (
-                  <SlotSection slotsData={pricing.available_slots} />
-                )}
+                {pricing.available_slots?.slots?.length > 0 && <SlotSection slotsData={pricing.available_slots} />}
               </div>
             )}
 
@@ -370,7 +600,7 @@ const HotelDetailPage = () => {
                 </h2>
                 <div className="space-y-4">
                   {room_types.map(room => (
-                    <RoomTypeCard key={room.id} room={room} currency={pricing?.currency} />
+                    <RoomTypeCard key={room.id} room={room} currency={currency} onBook={handleBookRoom} />
                   ))}
                 </div>
               </div>
@@ -383,8 +613,7 @@ const HotelDetailPage = () => {
             {operations && (
               <div className="bg-white border border-gray-200 rounded-2xl p-5">
                 <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <CalendarDays className="w-4 h-4 text-brand-500" />
-                  Check-in / Check-out
+                  <CalendarDays className="w-4 h-4 text-brand-500" />Check-in / Check-out
                 </h3>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
@@ -401,20 +630,18 @@ const HotelDetailPage = () => {
                   </div>
                   {operations.is_hourly_enabled && (
                     <div className="mt-2 flex items-center gap-1.5 text-xs text-green-700 font-medium bg-green-50 px-3 py-1.5 rounded-lg">
-                      <Clock className="w-3.5 h-3.5" />
-                      Hourly stays available
+                      <Clock className="w-3.5 h-3.5" />Hourly stays available
                     </div>
                   )}
                 </div>
               </div>
             )}
 
-            {/* Refund Policy */}
+            {/* Cancellation Policy */}
             {policies?.refund && (
               <div className="bg-white border border-gray-200 rounded-2xl p-5">
                 <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-green-500" />
-                  Cancellation Policy
+                  <Shield className="w-4 h-4 text-green-500" />Cancellation Policy
                 </h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex items-start gap-2 text-green-700">
@@ -423,7 +650,7 @@ const HotelDetailPage = () => {
                   </div>
                   <div className="flex items-start gap-2 text-amber-700">
                     <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <span>{policies.refund.partial_refund_percentage}% refund if {policies.refund.no_refund_window_hours}–{policies.refund.full_refund_window_hours} hrs before</span>
+                    <span>{policies.refund.partial_refund_percentage}% refund {policies.refund.no_refund_window_hours}–{policies.refund.full_refund_window_hours} hrs before</span>
                   </div>
                   <div className="flex items-start gap-2 text-red-600">
                     <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
@@ -438,40 +665,34 @@ const HotelDetailPage = () => {
               <p className="text-sm font-medium text-brand-100 mb-1">Starting from</p>
               <p className="text-3xl font-extrabold mb-4">
                 {pricing?.hourly
-                  ? formatCurrency(pricing.hourly.starting_from)
+                  ? formatCurrency(pricing.hourly.starting_from, currency)
                   : pricing?.daily
-                    ? formatCurrency(pricing.daily.starting_from)
+                    ? formatCurrency(pricing.daily.starting_from, currency)
                     : 'Contact us'}
                 <span className="text-lg font-normal text-brand-200 ml-1">
                   {pricing?.hourly ? `/ ${pricing.hourly.min_duration_hours}hr` : '/ night'}
                 </span>
               </p>
-              <Link
-                to={`/booking?hotel_id=${hotel.id}`}
+              <button
+                onClick={() => setShowBookingModal(true)}
                 className="block w-full text-center bg-white text-brand-700 font-bold py-3 rounded-xl hover:bg-brand-50 transition-colors shadow-md"
               >
                 Book Now
-              </Link>
-              <p className="text-center text-xs text-brand-200 mt-3">
-                Instant confirmation • No hidden fees
-              </p>
+              </button>
+              <p className="text-center text-xs text-brand-200 mt-3">Instant confirmation • No hidden fees</p>
             </div>
 
             {/* Location */}
             {(location?.latitude && location?.longitude) && (
               <div className="bg-white border border-gray-200 rounded-2xl p-5">
                 <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-red-500" />
-                  Location
+                  <MapPin className="w-4 h-4 text-red-500" />Location
                 </h3>
                 <p className="text-sm text-gray-600">{location.display_location}</p>
                 {location.address && <p className="text-sm text-gray-500">{location.address}</p>}
-                <a
-                  href={`https://maps.google.com/?q=${location.latitude},${location.longitude}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 inline-block text-xs text-brand-600 font-semibold hover:underline"
-                >
+                <a href={`https://maps.google.com/?q=${location.latitude},${location.longitude}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="mt-2 inline-block text-xs text-brand-600 font-semibold hover:underline">
                   View on Google Maps →
                 </a>
               </div>
