@@ -172,9 +172,7 @@ const ProfilePage = () => {
   const [showPhoneModal, setShowPhoneModal] = useState(false)
 
   // Editable fields
-  const [name, setName] = useState('')
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
+  const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
 
   useEffect(() => {
@@ -182,16 +180,14 @@ const ProfilePage = () => {
       try {
         const res = await getProfile()
         setProfileData(res.data)
-        const n = res.data.username || res.data.name || `${res.data.first_name || ''} ${res.data.last_name || ''}`.trim()
-        setName(n)
-        setFirstName(res.data.first_name || '')
-        setLastName(res.data.last_name || '')
+        const u = res.data.username || ''
+        setUsername(u)
         setEmail(res.data.email || '')
       } catch {
         // Fall back to Redux store
         if (storeUser) {
           setProfileData(storeUser)
-          setName(storeUser.username || storeUser.name || '')
+          setUsername(storeUser.username || storeUser.name || '')
         }
       } finally {
         setLoading(false)
@@ -204,20 +200,18 @@ const ProfilePage = () => {
     setSaving(true)
     try {
       const payload = {}
-      if (firstName !== profileData?.first_name) payload.first_name = firstName
-      if (lastName !== profileData?.last_name) payload.last_name = lastName
+      if (username !== profileData?.username) payload.username = username
       if (!profileData?.email && email.trim()) payload.email = email.trim()
       if (Object.keys(payload).length === 0) { setEditing(false); setSaving(false); return }
 
       const res = await updateProfile(payload)
       setProfileData(res.data)
       dispatch(updateUser({ 
-        name: `${res.data.first_name || ''} ${res.data.last_name || ''}`.trim(),
-        username: `${res.data.first_name || ''} ${res.data.last_name || ''}`.trim()
+        username: res.data.username,
+        name: res.data.username
       }))
       toast.success('Profile updated!')
       setEditing(false)
-      setName(`${res.data.first_name || ''} ${res.data.last_name || ''}`.trim())
     } catch (err) {
       const msg = err.response?.data?.error || 'Failed to update profile'
       toast.error(msg)
@@ -237,7 +231,7 @@ const ProfilePage = () => {
   }
 
   const data = profileData || storeUser
-  const displayName = name || data?.username || data?.name || data?.email?.split('@')[0] || 'User'
+  const displayName = username || data?.username || data?.name || data?.email?.split('@')[0] || 'User'
   const phoneNumber = data?.phone_number || data?.phone || '—'
   const userId = data?.uuid || data?.id
   const avatarGrad = AVATAR_GRADIENTS[(displayName.charCodeAt(0) ?? 0) % AVATAR_GRADIENTS.length]
@@ -276,25 +270,14 @@ const ProfilePage = () => {
             <div className="flex-1 min-w-0">
               {editing ? (
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">First Name</label>
-                      <input
-                        type="text"
-                        value={firstName}
-                        onChange={e => setFirstName(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:border-brand-400"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Last Name</label>
-                      <input
-                        type="text"
-                        value={lastName}
-                        onChange={e => setLastName(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:border-brand-400"
-                      />
-                    </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Full Name</label>
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={e => setUsername(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:border-brand-400"
+                    />
                   </div>
                   {!data?.email && (
                     <div className="mt-2">
@@ -315,7 +298,7 @@ const ProfilePage = () => {
                       {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                       {saving ? 'Saving...' : 'Save'}
                     </button>
-                    <button onClick={() => { setEditing(false); setFirstName(profileData?.first_name || ''); setLastName(profileData?.last_name || '') }}
+                    <button onClick={() => { setEditing(false); setUsername(profileData?.username || '') }}
                       className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50">
                       <X className="w-3.5 h-3.5" />Cancel
                     </button>
