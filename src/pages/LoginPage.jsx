@@ -3,6 +3,7 @@ import { useDispatch } from 'react-redux'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { Phone, KeyRound, ArrowRight, Clock, CheckCircle } from 'lucide-react'
 import { setCredentials, setAuthLoading, setAuthError } from '@/features/auth/authSlice'
+import { fetchWishlist } from '@/features/wishlist/wishlistSlice'
 import { useAuth } from '@/hooks/useAuth'
 import { useNotify } from '@/hooks/useNotify'
 import { sendOtp, verifyOtp, googleLogin } from '@/api/auth'
@@ -84,6 +85,7 @@ const LoginPage = () => {
         token: res.data.access,
         refreshToken: res.data.refresh,
       }))
+      dispatch(fetchWishlist())
       notify.success(`Welcome back, ${res.data.user?.username ?? 'there'}!`)
       navigate(from, { replace: true })
     } catch (error) {
@@ -104,6 +106,7 @@ const LoginPage = () => {
         token: res.data.access,
         refreshToken: res.data.refresh,
       }))
+      dispatch(fetchWishlist())
       notify.success(`Welcome, ${res.data.user?.username ?? 'there'}!`)
       navigate(from, { replace: true })
     } catch (error) {
