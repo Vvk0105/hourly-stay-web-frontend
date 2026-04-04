@@ -106,7 +106,7 @@ const BookingBreakdownPage = () => {
         guest_phone: guestPhone.trim(),
       }
       // Pass user UUID so booking is linked to the account
-      if (user?.id) bookingPayload.user_uuid = user.id
+      if (user?.uuid || user?.id) bookingPayload.user_uuid = user.uuid || user.id
 
       if (isHourly) {
         bookingPayload.check_in = checkIn
