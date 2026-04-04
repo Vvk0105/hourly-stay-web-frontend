@@ -1,10 +1,17 @@
 import SearchBar from '@/components/SearchBar'
 import HotelCard from '@/components/HotelCard'
 import MainLayout from '@/layouts/MainLayout'
-import { Sparkles, Clock, Shield, Smartphone } from 'lucide-react'
+import { Sparkles, Clock, Shield, Smartphone, Loader2, MapPin } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { getHotels } from '@/api/hotels'
-
+import { useDispatch, useSelector } from 'react-redux'
+import { getHotels, detectLocation } from '@/api/hotels'
+import {
+  setUserLocation,
+  selectUserLat,
+  selectUserLng,
+  selectUserCurrency,
+  selectLocationDetected,
+} from '@/features/search/searchSlice'
 
 const USP_FEATURES = [
   {
@@ -34,29 +41,70 @@ const USP_FEATURES = [
 ]
 
 const LandingPage = () => {
+  const dispatch = useDispatch()
+  const userLat = useSelector(selectUserLat)
+  const userLng = useSelector(selectUserLng)
+  const userCurrency = useSelector(selectUserCurrency)
+  const locationDetected = useSelector(selectLocationDetected)
+
   const [hotels, setHotels] = useState([])
   const [loading, setLoading] = useState(true)
+  const [locationCity, setLocationCity] = useState('')
 
-  useEffect (() => {
+  // Step 1: Detect user location from IP on first load
+  useEffect(() => {
+    if (locationDetected) return // Already detected in this session
+
+    const detect = async () => {
+      try {
+        const res = await detectLocation()
+        const d = res.data
+        dispatch(setUserLocation({
+          lat: d.latitude,
+          lng: d.longitude,
+          currency: d.currency,
+          country_code: d.country_code,
+          city: d.city,
+        }))
+        setLocationCity(d.city || d.country_name || '')
+      } catch {
+        // Silent fail — will show hotels without location filter
+      }
+    }
+    detect()
+  }, [dispatch, locationDetected])
+
+  // Step 2: Fetch hotels once location is known (or after timeout)
+  useEffect(() => {
     const fetchHotels = async () => {
-      try{
-        const res = await getHotels()
-        console.log('Hotels', res.data)
-        setHotels(res.data.results || res.data)
+      setLoading(true)
+      try {
+        const params = {}
+        if (userLat && userLng) {
+          params.lat = userLat
+          params.lng = userLng
+          params.radius_km = 35
+        }
+        if (userCurrency) params.user_currency = userCurrency
+
+        const res = await getHotels(params)
+        setHotels(res.data?.results ?? res.data ?? [])
       } catch (err) {
-        console.error(err)
+        console.error('Failed to fetch hotels:', err)
       } finally {
         setLoading(false)
       }
     }
+
+    // Fetch immediately (with or without location)
     fetchHotels()
-  },[])
+  }, [userLat, userLng, userCurrency])
 
   return (
     <MainLayout>
       {/* Hero Section */}
       <section
-        className="relative py-16 overflow-hidden"
+        className="relative py-16 overflow-visible"
         style={{ background: 'linear-gradient(135deg, #0F2027 0%, #203A43 50%, #2C5364 100%)' }}
       >
         {/* Blur blobs */}
@@ -92,10 +140,16 @@ const LandingPage = () => {
             <p className="text-gray-300 text-lg max-w-xl mx-auto">
               Pay only for the time you need. Perfect for layovers, meetings, rest, or a quick getaway.
             </p>
+            {locationCity && (
+              <p className="mt-3 flex items-center justify-center gap-1.5 text-sm text-brand-300">
+                <MapPin className="w-3.5 h-3.5" />
+                Showing hotels near <span className="font-semibold">{locationCity}</span>
+              </p>
+            )}
           </div>
 
           {/* Search Card */}
-          <div className="max-w-5xl mx-auto">
+          <div className="max-w-5xl mx-auto" style={{ overflow: 'visible' }}>
             <SearchBar />
           </div>
 
@@ -142,7 +196,9 @@ const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-end justify-between mb-8">
             <div>
-              <h2 className="text-3xl font-extrabold text-gray-900 mb-1">Available Hotels</h2>
+              <h2 className="text-3xl font-extrabold text-gray-900 mb-1">
+                {locationCity ? `Hotels Near ${locationCity}` : 'Available Hotels'}
+              </h2>
               <p className="text-gray-500">Flexible hourly stays with premium amenities</p>
             </div>
             <a href="/hotels" className="text-brand-600 font-semibold text-sm hover:underline hidden md:block">
@@ -150,17 +206,26 @@ const LandingPage = () => {
             </a>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {loading ? (
-              <p>Loading hotels...</p>
-            ) : hotels.length === 0 ? (
-              <p>No hotels found</p>
-            ) : (
-              hotels.map((hotel) => (
-                <HotelCard key={hotel.id} hotel={hotel} />
-              ))
-            )}
-          </div>
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-24 text-gray-400">
+              <Loader2 className="w-10 h-10 animate-spin mb-3 text-brand-500" />
+              <p className="font-medium">Finding hotels near you...</p>
+            </div>
+          ) : hotels.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed border-gray-200 rounded-2xl text-gray-400">
+              <p className="font-semibold text-lg">No hotels found nearby</p>
+              <p className="text-sm mt-1">Try a different location or browse all hotels</p>
+              <a href="/hotels" className="mt-4 px-5 py-2 bg-brand-600 text-white rounded-xl text-sm font-semibold">
+                Browse All Hotels
+              </a>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {hotels.slice(0, 6).map((hotel) => (
+                <HotelCard key={hotel.id} hotel={hotel} currency={userCurrency} />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

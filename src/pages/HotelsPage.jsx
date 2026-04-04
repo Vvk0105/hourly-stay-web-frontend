@@ -3,9 +3,14 @@ import { useSelector } from 'react-redux'
 import { useSearchParams } from 'react-router-dom'
 import MainLayout from '@/layouts/MainLayout'
 import HotelCard from '@/components/HotelCard'
-import { selectSearchParams } from '@/features/search/searchSlice'
+import {
+  selectUserLat,
+  selectUserLng,
+  selectUserCurrency,
+  selectSearchParams,
+} from '@/features/search/searchSlice'
 import { getHotels, searchHotels } from '@/api/hotels'
-import { Search, Sliders, SlidersHorizontal, ChevronDown, Loader2 } from 'lucide-react'
+import { Search, SlidersHorizontal, ChevronDown, Loader2 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 
 const SORT_OPTIONS = [
@@ -18,41 +23,72 @@ const SORT_OPTIONS = [
 const HotelsPage = () => {
   const [searchParams] = useSearchParams()
   const reduxSearch = useSelector(selectSearchParams)
+  const userLat = useSelector(selectUserLat)
+  const userLng = useSelector(selectUserLng)
+  const userCurrency = useSelector(selectUserCurrency)
 
   const [hotels, setHotels] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [sortBy, setSortBy] = useState('default')
   const [showFilters, setShowFilters] = useState(false)
-  const [filters, setFilters] = useState({
-    pricing_type: '', // 'hourly' | 'daily' | 'both'
-  })
+  const [filters, setFilters] = useState({ pricing_type: '' })
 
+  // URL params override redux state
   const city = searchParams.get('city') || reduxSearch?.city || ''
-  const date = searchParams.get('date') || reduxSearch?.date || ''
+  const mode = searchParams.get('mode') || reduxSearch?.bookingMode || ''
+  const checkIn = searchParams.get('check_in') || reduxSearch?.checkIn || ''
+  const checkOut = searchParams.get('check_out') || reduxSearch?.checkOut || ''
+  const guests = parseInt(searchParams.get('guests') || reduxSearch?.guests || '1')
+
+  // Derive lat/lng from URL or redux
+  const lat = parseFloat(searchParams.get('lat')) || userLat
+  const lng = parseFloat(searchParams.get('lng')) || userLng
 
   const fetchHotels = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const params = {}
-      if (city) params.city = city
-      if (date) params.date = date
-      if (filters.pricing_type) params.pricing_type = filters.pricing_type
+      let res
 
-      const res = city
-        ? await searchHotels(params)
-        : await getHotels(params)
+      if (lat && lng) {
+        // Build POST body for the search endpoint
+        const body = {
+          lat,
+          lng,
+          radius_km: 35,
+          rooms: 1,
+          adults: guests,
+          children: 0,
+        }
 
-      const results = res.data?.results ?? res.data ?? []
-      setHotels(results)
+        if (mode === 'hourly') body.booking_type = 'HOURLY'
+        else if (mode === 'daily') body.booking_type = 'NIGHTLY'
+
+        if (checkIn) body.check_in = checkIn
+        if (checkOut) body.check_out = checkOut
+
+        res = await searchHotels(body)
+        const data = res.data
+        // Search endpoint returns { count, hotels, search_params }
+        const list = data?.hotels ?? data?.results ?? (Array.isArray(data) ? data : [])
+        setHotels(list)
+      } else {
+        // No coordinates — fall back to home listing
+        const params = {}
+        if (userCurrency) params.user_currency = userCurrency
+        if (filters.pricing_type) params.pricing_type = filters.pricing_type
+        res = await getHotels(params)
+        const results = res.data?.results ?? res.data ?? []
+        setHotels(results)
+      }
     } catch (err) {
       console.error('Failed to fetch hotels:', err)
       setError('Failed to load hotels. Please try again.')
     } finally {
       setLoading(false)
     }
-  }, [city, date, filters.pricing_type])
+  }, [lat, lng, mode, checkIn, checkOut, guests, userCurrency, filters.pricing_type])
 
   useEffect(() => {
     fetchHotels()
@@ -70,7 +106,7 @@ const HotelsPage = () => {
       const pb = b.pricing?.hourly?.starting_from ?? b.pricing?.daily?.starting_from ?? 0
       return pb - pa
     }
-    if (sortBy === 'rating') return b.average_rating - a.average_rating
+    if (sortBy === 'rating') return (b.average_rating ?? 0) - (a.average_rating ?? 0)
     return 0
   })
 
@@ -85,7 +121,7 @@ const HotelsPage = () => {
             </h1>
             <p className="text-gray-500 mt-1">
               {loading ? 'Searching...' : `${sorted.length} hotel${sorted.length !== 1 ? 's' : ''} found`}
-              {date && <span className="ml-2 text-sm text-brand-600 font-medium">for {date}</span>}
+              {mode && <span className="ml-2 text-sm text-brand-600 font-medium capitalize">· {mode} stays</span>}
             </p>
           </div>
 
@@ -128,7 +164,6 @@ const HotelsPage = () => {
                   { value: '', label: 'All' },
                   { value: 'hourly', label: 'Hourly' },
                   { value: 'daily', label: 'Daily' },
-                  { value: 'both', label: 'Both' },
                 ].map(o => (
                   <button
                     key={o.value}
@@ -168,12 +203,12 @@ const HotelsPage = () => {
           <div className="flex flex-col items-center justify-center py-24 border-2 border-dashed border-gray-200 rounded-2xl text-gray-400">
             <Search className="w-12 h-12 mb-3 text-gray-300" />
             <p className="font-semibold text-lg">No hotels found</p>
-            <p className="text-sm mt-1">Try a different city or date</p>
+            <p className="text-sm mt-1">Try a different location or date</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {sorted.map(hotel => (
-              <HotelCard key={hotel.id} hotel={hotel} />
+              <HotelCard key={hotel.id} hotel={hotel} currency={userCurrency} />
             ))}
           </div>
         )}

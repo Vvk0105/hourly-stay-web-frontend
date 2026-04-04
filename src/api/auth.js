@@ -15,6 +15,13 @@ export const getProfile = () =>
 export const updateProfile = (data) =>
   axiosInstance.patch('/api/v1/users/profile/update/', data)
 
+// Two-step phone number change flow
+export const changePhoneRequest = (new_phone_number) =>
+  axiosInstance.post('/api/v1/users/profile/change-phone/request/', { new_phone_number })
+
+export const changePhoneVerify = (new_phone_number, otp) =>
+  axiosInstance.post('/api/v1/users/profile/change-phone/verify/', { new_phone_number, otp })
+
 // Registration is handled automatically by verify-otp for new users
 export const registerUser = (data) =>
   axiosInstance.post('/api/v1/users/profile/update/', data)
