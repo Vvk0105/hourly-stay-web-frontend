@@ -501,6 +501,14 @@ const ProfilePage = () => {
             <Trash2 className="w-4 h-4" />Delete Account
           </button>
         </div>
+
+        {/* Logout */}
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border-2 border-red-200 text-red-600 font-bold hover:bg-red-50 transition-colors"
+        >
+          <LogOut className="w-4 h-4" />Sign Out
+        </button>
       </div>
     </MainLayout>
   )
