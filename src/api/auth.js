@@ -28,3 +28,6 @@ export const changePhoneVerify = (new_phone_number, otp) =>
 // Registration is handled automatically by verify-otp for new users
 export const registerUser = (data) =>
   axiosInstance.post('/api/v1/users/profile/update/', data)
+
+export const deleteAccount = () =>
+  axiosInstance.delete('/api/v1/users/profile/delete/')
