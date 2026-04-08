@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import MainLayout from '@/layouts/MainLayout'
 import { selectCurrentUser, updateUser } from '@/features/auth/authSlice'
-import { getProfile, updateProfile, changePhoneRequest, changePhoneVerify } from '@/api/auth'
+import { getProfile, updateProfile, changePhoneRequest, changePhoneVerify, deleteAccount } from '@/api/auth'
 import {
   User, Phone, Mail, Edit2, Check, X, Loader2,
   Shield, Camera, ChevronRight, Lock, Bell, LogOut,
-  AlertCircle, CheckCircle, Smartphone
+  AlertCircle, CheckCircle, Smartphone, Trash2
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import toast from 'react-hot-toast'
@@ -160,6 +160,67 @@ const PhoneChangeModal = ({ currentPhone, onClose, onSuccess }) => {
   )
 }
 
+// ──── Delete Account Modal ──────────────────────────────────────────────────────
+const DeleteAccountModal = ({ onClose, onSuccess }) => {
+  const [loading, setLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
+
+  const handleDelete = async () => {
+    setLoading(true)
+    setErrorMsg('')
+    try {
+      await deleteAccount()
+      toast.success('Account deleted successfully!')
+      onSuccess()
+      onClose()
+    } catch (err) {
+      const msg = err.response?.data?.message || err.response?.data?.error || 'Failed to delete account'
+      setErrorMsg(msg)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Trash2 className="w-8 h-8 text-red-600" />
+        </div>
+        <h2 className="text-xl font-extrabold text-gray-900 mb-2">Delete Account?</h2>
+        <p className="text-sm text-gray-500 mb-6">
+          Are you sure you want to delete your account? This action cannot be undone and you will lose all your data.
+        </p>
+        
+        {errorMsg && (
+          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm mb-4 text-left">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            {errorMsg}
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={loading}
+            className="flex-1 flex justify-center items-center gap-2 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors disabled:opacity-60"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Delete'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ──── Profile Page ─────────────────────────────────────────────────────────────
 const ProfilePage = () => {
   const dispatch = useDispatch()
@@ -170,6 +231,7 @@ const ProfilePage = () => {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showPhoneModal, setShowPhoneModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   // Editable fields
   const [username, setUsername] = useState('')
@@ -251,6 +313,12 @@ const ProfilePage = () => {
           currentPhone={phoneNumber}
           onClose={() => setShowPhoneModal(false)}
           onSuccess={handlePhoneSuccess}
+        />
+      )}
+      {showDeleteModal && (
+        <DeleteAccountModal
+          onClose={() => setShowDeleteModal(false)}
+          onSuccess={handleLogout}
         />
       )}
 
@@ -417,13 +485,22 @@ const ProfilePage = () => {
           ))}
         </div>
 
-        {/* Logout */}
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border-2 border-red-200 text-red-600 font-bold hover:bg-red-50 transition-colors"
-        >
-          <LogOut className="w-4 h-4" />Sign Out
-        </button>
+        {/* Logout & Delete */}
+        <div className="space-y-4">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border-2 border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />Sign Out
+          </button>
+
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-red-50 text-red-600 font-bold hover:bg-red-100 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />Delete Account
+          </button>
+        </div>
       </div>
     </MainLayout>
   )
